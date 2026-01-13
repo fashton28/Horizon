@@ -1,11 +1,5 @@
-import {Button} from "@/components/ui/button"
+import { redirect } from "next/navigation";
 
-const page = () => {
-  return (
-    <Button>
-      Click Me!
-    </Button>
-  )
+export default function HomePage() {
+  redirect("/dashboard");
 }
-
-export default page

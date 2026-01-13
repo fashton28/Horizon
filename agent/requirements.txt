@@ -1,0 +1,4 @@
+vision-agents[getstream,gemini]
+python-dotenv
+fastapi
+uvicorn
