@@ -8,7 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   CommandDialog,
   CommandEmpty,
@@ -166,6 +169,10 @@ export default function DashboardPage() {
       {/* Meeting Setup Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-sm p-0 gap-0">
+          <VisuallyHidden.Root>
+            <DialogTitle>New Practice Session</DialogTitle>
+            <DialogDescription>Configure your interview practice session settings</DialogDescription>
+          </VisuallyHidden.Root>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h2 className="font-medium">New Session</h2>
