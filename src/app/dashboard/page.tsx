@@ -18,7 +18,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mic, Video, Users, Brain, Briefcase, Code } from "lucide-react";
+import { Mic, Video, Users, Brain, Briefcase, Code, Globe } from "lucide-react";
+
+const languages = [
+  {
+    id: "en",
+    name: "English",
+    description: "Interview conducted entirely in English",
+  },
+  {
+    id: "es",
+    name: "Spanish",
+    description: "Interview conducted entirely in Spanish",
+  },
+  {
+    id: "bilingual",
+    name: "Bilingual (EN/ES)",
+    description: "English with Spanish practice phrases",
+  },
+];
 
 const interviewTypes = [
   {
@@ -56,6 +74,7 @@ const interviewTypes = [
 export default function DashboardPage() {
   const router = useRouter();
   const [selectedType, setSelectedType] = useState("general");
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [userId] = useState(() => `user-${Math.random().toString(36).substring(2, 9)}`);
 
   const createMeeting = useMutation({
@@ -65,6 +84,7 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           interviewType: selectedType,
+          language: selectedLanguage,
           userId,
         }),
       });
@@ -76,7 +96,7 @@ export default function DashboardPage() {
       return response.json();
     },
     onSuccess: (data) => {
-      router.push(`/meeting/${data.callId}?type=${selectedType}&userId=${userId}`);
+      router.push(`/meeting/${data.callId}?type=${selectedType}&lang=${selectedLanguage}&userId=${userId}`);
     },
   });
 
@@ -126,6 +146,29 @@ export default function DashboardPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Language Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Language</label>
+                <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.id} value={lang.id}>
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-4 w-4" />
+                          {lang.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {languages.find((l) => l.id === selectedLanguage)?.description}
+                </p>
               </div>
 
               {/* Selected Type Description */}

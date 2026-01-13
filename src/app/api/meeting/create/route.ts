@@ -7,7 +7,7 @@ const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8001"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { interviewType = "general", userId } = body;
+    const { interviewType = "general", language = "en", userId } = body;
 
     if (!userId) {
       return NextResponse.json(
@@ -34,9 +34,10 @@ export async function POST(request: NextRequest) {
           call_id: callId,
           call_type: "default",
           interview_type: interviewType,
+          language: language,
         }),
       });
-      console.log(`Agent triggered for call: ${callId}`);
+      console.log(`Agent triggered for call: ${callId} (language: ${language})`);
     } catch (agentError) {
       console.warn("Failed to trigger agent (is the agent server running?):", agentError);
       // Don't fail the request if agent isn't available - user can still join the call
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
       callId,
       token,
       interviewType,
+      language,
     });
   } catch (error) {
     console.error("Error creating meeting:", error);
