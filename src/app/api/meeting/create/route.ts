@@ -7,7 +7,7 @@ const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8001"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { interviewType = "general", language = "en", userId } = body;
+    const { interviewType = "general", language = "en", voice = "Puck", userId } = body;
 
     if (!userId) {
       return NextResponse.json(
@@ -35,9 +35,10 @@ export async function POST(request: NextRequest) {
           call_type: "default",
           interview_type: interviewType,
           language: language,
+          voice: voice,
         }),
       });
-      console.log(`Agent triggered for call: ${callId} (language: ${language})`);
+      console.log(`Agent triggered for call: ${callId} (language: ${language}, voice: ${voice})`);
     } catch (agentError) {
       console.warn("Failed to trigger agent (is the agent server running?):", agentError);
       // Don't fail the request if agent isn't available - user can still join the call

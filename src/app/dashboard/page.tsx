@@ -62,12 +62,23 @@ const languages = [
   { id: "bilingual", name: "Bilingual", flag: "🌎" },
 ];
 
+// Voices
+const voices = [
+  { id: "Puck", name: "Puck", description: "Upbeat, energetic" },
+  { id: "Charon", name: "Charon", description: "Calm, informative" },
+  { id: "Kore", name: "Kore", description: "Warm, friendly" },
+  { id: "Fenrir", name: "Fenrir", description: "Strong, confident" },
+  { id: "Aoede", name: "Aoede", description: "Soft, bright" },
+  { id: "Leda", name: "Leda", description: "Clear, neutral" },
+];
+
 export default function DashboardPage() {
   const router = useRouter();
   const [commandOpen, setCommandOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState("general");
   const [selectedLanguage, setSelectedLanguage] = useState("en");
+  const [selectedVoice, setSelectedVoice] = useState("Puck");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
@@ -93,6 +104,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           interviewType: selectedType,
           language: selectedLanguage,
+          voice: selectedVoice,
           userId,
         }),
       });
@@ -217,6 +229,16 @@ export default function DashboardPage() {
                 <X className="h-3 w-3" />
               </button>
             </span>
+            {/* Selected Voice */}
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-foreground text-background text-xs font-medium">
+              {voices.find(v => v.id === selectedVoice)?.name}
+              <button
+                onClick={() => setSelectedVoice("Puck")}
+                className="hover:bg-white/20 rounded-sm"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
           </div>
 
           {/* Options List */}
@@ -272,6 +294,34 @@ export default function DashboardPage() {
                     </div>
                     <span className="text-base">{lang.flag}</span>
                     <span className="text-sm flex-1 text-left">{lang.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Voices Section */}
+            <div className="px-4 py-2 border-t">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Voice</p>
+              <div className="space-y-1">
+                {voices.map((voice) => (
+                  <button
+                    key={voice.id}
+                    onClick={() => setSelectedVoice(voice.id)}
+                    className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-muted transition-colors"
+                  >
+                    <div className={`h-4 w-4 rounded border-2 flex items-center justify-center ${
+                      selectedVoice === voice.id
+                        ? "bg-primary border-primary"
+                        : "border-muted-foreground/30"
+                    }`}>
+                      {selectedVoice === voice.id && (
+                        <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="text-sm flex-1 text-left">{voice.name}</span>
+                    <span className="text-xs text-muted-foreground">{voice.description}</span>
                   </button>
                 ))}
               </div>

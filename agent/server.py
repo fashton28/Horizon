@@ -9,6 +9,18 @@ import uvicorn
 
 from vision_agents.core import User, Agent
 from vision_agents.plugins import getstream, gemini, smart_turn
+from google.genai.types import (
+    LiveConnectConfigDict,
+    SpeechConfigDict,
+    VoiceConfigDict,
+    PrebuiltVoiceConfigDict,
+    Modality,
+    AudioTranscriptionConfigDict,
+    RealtimeInputConfigDict,
+    TurnCoverage,
+    ContextWindowCompressionConfigDict,
+    SlidingWindowDict,
+)
 
 load_dotenv()
 
@@ -133,9 +145,31 @@ class JoinRequest(BaseModel):
     call_type: str = "default"
     interview_type: str = "general"
     language: str = "en"
+    voice: str = "Puck"
 
 
-async def run_agent(call_id: str, call_type: str, interview_type: str, language: str = "en"):
+def create_voice_config(voice_name: str) -> LiveConnectConfigDict:
+    """Create Gemini Live config with the specified voice."""
+    return LiveConnectConfigDict(
+        response_modalities=[Modality.AUDIO],
+        input_audio_transcription=AudioTranscriptionConfigDict(),
+        output_audio_transcription=AudioTranscriptionConfigDict(),
+        speech_config=SpeechConfigDict(
+            voice_config=VoiceConfigDict(
+                prebuilt_voice_config=PrebuiltVoiceConfigDict(voice_name=voice_name)
+            ),
+        ),
+        realtime_input_config=RealtimeInputConfigDict(
+            turn_coverage=TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY
+        ),
+        context_window_compression=ContextWindowCompressionConfigDict(
+            trigger_tokens=25600,
+            sliding_window=SlidingWindowDict(target_tokens=12800),
+        ),
+    )
+
+
+async def run_agent(call_id: str, call_type: str, interview_type: str, language: str = "en", voice: str = "Puck"):
     """Run the agent in a call."""
     try:
         # Get language-specific instructions
@@ -144,13 +178,10 @@ async def run_agent(call_id: str, call_type: str, interview_type: str, language:
         type_specific = type_instructions.get(interview_type, type_instructions["general"])
         instructions = base_instructions + type_specific
 
-        # Get language code for Gemini
-        language_code = LANGUAGE_CODES.get(language, "en-US")
-
         # Get opening prompt for the language
         opening_prompt = OPENING_PROMPTS.get(language, OPENING_PROMPTS["en"])
 
-        logger.info(f"Configuring agent for language: {language} ({language_code})")
+        logger.info(f"Configuring agent for language: {language}, voice: {voice}")
 
         # Configure turn detection for balanced latency
         turn_detection = smart_turn.TurnDetection(
@@ -158,9 +189,9 @@ async def run_agent(call_id: str, call_type: str, interview_type: str, language:
             speech_probability_threshold=0.4
         )
 
-        # Configure Gemini (language is handled via system prompt, not config)
-        # Note: Gemini native audio model is multilingual but doesn't accept language_code param
-        llm = gemini.Realtime()
+        # Configure Gemini with selected voice
+        voice_config = create_voice_config(voice)
+        llm = gemini.Realtime(config=voice_config)
 
         # Set agent name based on language
         agent_name = {
@@ -197,14 +228,14 @@ async def run_agent(call_id: str, call_type: str, interview_type: str, language:
 @app.post("/join")
 async def join_call(request: JoinRequest):
     """Endpoint to trigger agent to join a call."""
-    logger.info(f"Received join request for call: {request.call_id} (language: {request.language})")
+    logger.info(f"Received join request for call: {request.call_id} (language: {request.language}, voice: {request.voice})")
 
     # Run agent in background task
     asyncio.create_task(
-        run_agent(request.call_id, request.call_type, request.interview_type, request.language)
+        run_agent(request.call_id, request.call_type, request.interview_type, request.language, request.voice)
     )
 
-    return {"status": "ok", "message": f"Agent joining call {request.call_id} in {request.language}"}
+    return {"status": "ok", "message": f"Agent joining call {request.call_id} in {request.language} with voice {request.voice}"}
 
 
 @app.get("/health")
