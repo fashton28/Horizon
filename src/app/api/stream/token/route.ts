@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateUserToken } from "@/lib/stream";
+import { auth } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await request.json();
+    // Verify authentication
+    const session = await auth.api.getSession({
+      headers: request.headers,
+    });
 
-    if (!userId) {
+    if (!session) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
+        { error: "Unauthorized" },
+        { status: 401 }
       );
     }
 
+    const userId = session.user.id;
     const token = generateUserToken(userId);
 
     return NextResponse.json({ token });

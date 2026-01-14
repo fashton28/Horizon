@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -44,6 +45,12 @@ import {
   ChevronDown,
   X,
   Loader2,
+  LogOut,
+  FileText,
+  Upload,
+  CheckCircle2,
+  AlertCircle,
+  Target,
 } from "lucide-react";
 
 // Interview types
@@ -74,6 +81,7 @@ const voices = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { data: session, isPending: isSessionLoading } = authClient.useSession();
   const [commandOpen, setCommandOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState("general");
@@ -82,7 +90,18 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
-  const [userId] = useState(() => `user-${Math.random().toString(36).substring(2, 9)}`);
+  const [activeTab, setActiveTab] = useState<"sessions" | "resume">("sessions");
+
+  const user = session?.user;
+  const userId = user?.id || "";
+  const userName = user?.name || "User";
+  const userEmail = user?.email || "";
+  const userInitials = userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const handleLogout = async () => {
+    await authClient.signOut();
+    router.push("/auth/login");
+  };
 
   // CMD+K handler
   useEffect(() => {
@@ -105,7 +124,6 @@ export default function DashboardPage() {
           interviewType: selectedType,
           language: selectedLanguage,
           voice: selectedVoice,
-          userId,
         }),
       });
 
@@ -114,7 +132,7 @@ export default function DashboardPage() {
     },
     onSuccess: (data) => {
       setModalOpen(false);
-      router.push(`/meeting/${data.callId}?type=${selectedType}&lang=${selectedLanguage}&userId=${userId}`);
+      router.push(`/meeting/${data.callId}?type=${selectedType}&lang=${selectedLanguage}`);
     },
   });
 
@@ -132,20 +150,68 @@ export default function DashboardPage() {
 
   const hasFilters = searchQuery || filterStatus !== "all" || filterType !== "all";
 
-  // Mock recent sessions (will be from DB later)
-  const recentSessions = [
-    { id: 1, type: "technical", status: "completed", date: "Today", duration: "25 min" },
-    { id: 2, type: "behavioral", status: "completed", date: "Yesterday", duration: "30 min" },
-    { id: 3, type: "system_design", status: "completed", date: "2 days ago", duration: "45 min" },
-  ];
+  // Fetch sessions from database
+  const { data: sessionsData, isLoading: isSessionsLoading } = useQuery({
+    queryKey: ["sessions"],
+    queryFn: async () => {
+      const response = await fetch("/api/sessions");
+      if (!response.ok) throw new Error("Failed to fetch sessions");
+      return response.json();
+    },
+    enabled: !!session?.user,
+  });
+
+  // Helper function to format date
+  const formatDate = (date: string) => {
+    const d = new Date(date);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    if (days < 7) return `${days} days ago`;
+    return d.toLocaleDateString();
+  };
+
+  // Helper function to format duration
+  const formatDuration = (ms: number | null) => {
+    if (!ms) return "N/A";
+    const minutes = Math.floor(ms / 60000);
+    if (minutes < 1) return "< 1 min";
+    return `${minutes} min`;
+  };
+
+  // Transform and filter sessions
+  const recentSessions = (sessionsData?.sessions || []).map((s: {
+    id: string;
+    interviewType: string;
+    status: string;
+    startedAt: string;
+    durationMs: number | null;
+  }) => ({
+    id: s.id,
+    type: s.interviewType,
+    status: s.status,
+    date: formatDate(s.startedAt),
+    duration: formatDuration(s.durationMs),
+  }));
 
   // Filter sessions
-  const filteredSessions = recentSessions.filter(session => {
+  const filteredSessions = recentSessions.filter((session: { type: string; status: string }) => {
     if (filterStatus !== "all" && session.status !== filterStatus) return false;
     if (filterType !== "all" && session.type !== filterType) return false;
     if (searchQuery && !session.type.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+
+  if (isSessionLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background">
@@ -354,19 +420,37 @@ export default function DashboardPage() {
       {/* Sidebar */}
       <aside className="w-56 bg-sidebar text-sidebar-foreground flex flex-col">
         {/* Logo */}
-        <div className="p-4 flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <Sparkles className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="font-semibold text-lg">SkillBridge</span>
+        <div className="p-4">
+          <span className="text-2xl" style={{ fontFamily: "var(--font-playfair)" }}>
+            <span className="italic">Hori</span>
+            <span className="font-bold italic">zon</span>
+          </span>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-2">
           <div className="space-y-1">
-            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-accent text-sidebar-accent-foreground">
+            <button
+              onClick={() => setActiveTab("sessions")}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                activeTab === "sessions"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }`}
+            >
               <LayoutDashboard className="h-4 w-4" />
               <span className="text-sm font-medium">Sessions</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("resume")}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                activeTab === "resume"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }`}
+            >
+              <FileText className="h-4 w-4" />
+              <span className="text-sm font-medium">Resume Optimizer</span>
             </button>
             <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
               <Settings className="h-4 w-4" />
@@ -401,16 +485,22 @@ export default function DashboardPage() {
 
         {/* User Profile */}
         <div className="p-3 border-t border-sidebar-border">
-          <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent transition-colors">
+          <div className="flex items-center gap-3 p-2">
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-medium">
-              JD
+              {userInitials || "U"}
             </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium">John Doe</p>
-              <p className="text-xs text-sidebar-muted">john@example.com</p>
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-sm font-medium truncate">{userName}</p>
+              <p className="text-xs text-sidebar-muted truncate">{userEmail}</p>
             </div>
-            <ChevronDown className="h-4 w-4 text-sidebar-muted" />
-          </button>
+            <button
+              onClick={handleLogout}
+              className="h-8 w-8 rounded-lg hover:bg-sidebar-accent flex items-center justify-center transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4 text-sidebar-muted" />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -432,98 +522,217 @@ export default function DashboardPage() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-auto p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-semibold">My Sessions</h1>
-            <Button onClick={() => setModalOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Meeting
-            </Button>
-          </div>
+          {activeTab === "sessions" && (
+            <>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-semibold">My Sessions</h1>
+                <Button onClick={() => setModalOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Meeting
+                </Button>
+              </div>
 
-          {/* Filters */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search sessions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-48"
-              />
-            </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {interviewTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {hasFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
-                <X className="mr-1 h-4 w-4" />
-                Clear
-              </Button>
-            )}
-          </div>
-
-          {/* Sessions Grid */}
-          {filteredSessions.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <Video className="h-6 w-6 text-muted-foreground" />
+              {/* Filters */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search sessions..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 w-48"
+                  />
                 </div>
-                <h3 className="font-medium mb-1">No sessions found</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {hasFilters ? "Try adjusting your filters" : "Start your first practice session"}
-                </p>
-                {!hasFilters && (
-                  <Button onClick={() => setModalOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Meeting
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    {interviewTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                    <X className="mr-1 h-4 w-4" />
+                    Clear
                   </Button>
                 )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredSessions.map((session) => {
-                const typeInfo = interviewTypes.find((t) => t.id === session.type);
-                return (
-                  <Card key={session.id} className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-sm">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          {typeInfo && <typeInfo.icon className="h-5 w-5 text-primary" />}
-                        </div>
-                        <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 capitalize">
-                          {session.status.replace("_", " ")}
-                        </span>
+              </div>
+
+              {/* Sessions Grid */}
+              {isSessionsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : filteredSessions.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <Video className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <h3 className="font-medium mb-1">No sessions found</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {hasFilters ? "Try adjusting your filters" : "Start your first practice session"}
+                    </p>
+                    {!hasFilters && (
+                      <Button onClick={() => setModalOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        New Meeting
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredSessions.map((session: { id: string; type: string; status: string; date: string; duration: string }) => {
+                    const typeInfo = interviewTypes.find((t) => t.id === session.type);
+                    const statusStyles = session.status === "completed"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-yellow-100 text-yellow-700";
+                    return (
+                      <Card key={session.id} className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-sm">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                              {typeInfo && <typeInfo.icon className="h-5 w-5 text-primary" />}
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded-full capitalize ${statusStyles}`}>
+                              {session.status.replace("_", " ")}
+                            </span>
+                          </div>
+                          <p className="font-medium capitalize">{session.type.replace("_", " ")} Interview</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {session.date} · {session.duration}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === "resume" && (
+            <>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h1 className="text-2xl font-semibold">Resume Optimizer</h1>
+                  <p className="text-muted-foreground text-sm mt-1">AI-powered resume analysis and optimization</p>
+                </div>
+              </div>
+
+              {/* Upload Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <Card className="border-dashed">
+                    <CardContent className="flex flex-col items-center justify-center py-16">
+                      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                        <Upload className="h-8 w-8 text-primary" />
                       </div>
-                      <p className="font-medium capitalize">{session.type.replace("_", " ")} Interview</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {session.date} · {session.duration}
+                      <h3 className="font-semibold text-lg mb-2">Upload your resume</h3>
+                      <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
+                        Drag and drop your resume file here, or click to browse. We support PDF and DOCX formats.
+                      </p>
+                      <Button>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Choose File
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Mock Analysis Preview */}
+                  <Card className="mt-6">
+                    <CardContent className="p-6">
+                      <h3 className="font-semibold mb-4">What you&apos;ll get</h3>
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">ATS Compatibility Score</p>
+                            <p className="text-sm text-muted-foreground">See how well your resume performs with applicant tracking systems</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <Target className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">Keyword Optimization</p>
+                            <p className="text-sm text-muted-foreground">Get suggestions for industry-specific keywords to include</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                            <AlertCircle className="h-4 w-4 text-orange-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">Improvement Suggestions</p>
+                            <p className="text-sm text-muted-foreground">Receive actionable feedback to strengthen your resume</p>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Sidebar Info */}
+                <div className="space-y-6">
+                  <Card>
+                    <CardContent className="p-6">
+                      <h3 className="font-semibold mb-3">How it works</h3>
+                      <ol className="space-y-3 text-sm">
+                        <li className="flex items-start gap-3">
+                          <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium flex-shrink-0">1</span>
+                          <span className="text-muted-foreground">Upload your current resume</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium flex-shrink-0">2</span>
+                          <span className="text-muted-foreground">Our AI analyzes content, format, and keywords</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium flex-shrink-0">3</span>
+                          <span className="text-muted-foreground">Get detailed feedback and suggestions</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium flex-shrink-0">4</span>
+                          <span className="text-muted-foreground">Download your optimized resume</span>
+                        </li>
+                      </ol>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-primary/5 border-primary/20">
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span className="font-semibold text-sm">Pro Tip</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        For best results, include a job description you&apos;re targeting. Our AI will tailor suggestions specifically for that role.
                       </p>
                     </CardContent>
                   </Card>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </main>

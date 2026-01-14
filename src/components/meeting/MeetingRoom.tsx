@@ -13,18 +13,27 @@ import { Loader2 } from "lucide-react";
 
 interface MeetingRoomProps {
   interviewType: string;
+  callId: string;
 }
 
-export function MeetingRoom({ interviewType }: MeetingRoomProps) {
+export function MeetingRoom({ interviewType, callId }: MeetingRoomProps) {
   const router = useRouter();
   const { useCallCallingState } = useCallStateHooks();
   const callingState = useCallCallingState();
 
   useEffect(() => {
     if (callingState === CallingState.LEFT) {
+      // End the session in the database
+      fetch("/api/meeting/end", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ callId }),
+      }).catch((err) => {
+        console.error("Failed to end session:", err);
+      });
       router.push("/dashboard");
     }
-  }, [callingState, router]);
+  }, [callingState, router, callId]);
 
   if (callingState !== CallingState.JOINED) {
     return (

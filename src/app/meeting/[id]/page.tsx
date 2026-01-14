@@ -8,6 +8,7 @@ import {
   StreamCall,
   User,
 } from "@stream-io/video-react-sdk";
+import { authClient } from "@/lib/auth-client";
 import { MeetingSetup } from "@/components/meeting/MeetingSetup";
 import { MeetingRoom } from "@/components/meeting/MeetingRoom";
 import { Loader2 } from "lucide-react";
@@ -23,7 +24,8 @@ export default function MeetingPage({ params }: MeetingPageProps) {
   const callId = resolvedParams.id;
   const searchParams = useSearchParams();
   const interviewType = searchParams.get("type") || "general";
-  const userId = searchParams.get("userId") || `user-${Math.random().toString(36).substring(2, 9)}`;
+
+  const { data: session, isPending: isSessionLoading } = authClient.useSession();
 
   const [client, setClient] = useState<StreamVideoClient | null>(null);
   const [call, setCall] = useState<ReturnType<StreamVideoClient["call"]> | null>(null);
@@ -31,13 +33,20 @@ export default function MeetingPage({ params }: MeetingPageProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Wait for session to load
+    if (isSessionLoading || !session?.user) {
+      return;
+    }
+
     const initClient = async () => {
       try {
+        const userId = session.user.id;
+        const userName = session.user.name;
+
         // Get token from our API
         const tokenResponse = await fetch("/api/stream/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId }),
         });
 
         if (!tokenResponse.ok) {
@@ -48,7 +57,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
 
         const user: User = {
           id: userId,
-          name: `Candidate ${userId.slice(-4)}`,
+          name: userName,
           type: "guest",
         };
 
@@ -78,7 +87,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
         client.disconnectUser();
       }
     };
-  }, [callId, userId]);
+  }, [callId, session, isSessionLoading]);
 
   if (error) {
     return (
@@ -93,7 +102,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
     );
   }
 
-  if (!client || !call) {
+  if (isSessionLoading || !client || !call) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
@@ -111,7 +120,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
             interviewType={interviewType}
           />
         ) : (
-          <MeetingRoom interviewType={interviewType} />
+          <MeetingRoom interviewType={interviewType} callId={callId} />
         )}
       </StreamCall>
     </StreamVideo>

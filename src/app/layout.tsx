@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
@@ -14,8 +14,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+});
+
 export const metadata: Metadata = {
-  title: "AI Interview Practice",
+  title: "Horizon - AI Interview Practice",
   description: "Practice interviews with an AI-powered interviewer",
 };
 
@@ -27,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased`}
       >
         <QueryProvider>{children}</QueryProvider>
       </body>

@@ -1,26 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCall, generateUserToken } from "@/lib/stream";
+import { auth } from "@/lib/auth";
 import { nanoid } from "nanoid";
+import { db } from "@/db";
+import { interviewSession } from "@/db/schema";
 
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8001";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { interviewType = "general", language = "en", voice = "Puck", userId } = body;
+    // Verify authentication
+    const session = await auth.api.getSession({
+      headers: request.headers,
+    });
 
-    if (!userId) {
+    if (!session) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
+        { error: "Unauthorized" },
+        { status: 401 }
       );
     }
+
+    const userId = session.user.id;
+    const body = await request.json();
+    const { interviewType = "general", language = "en", voice = "Puck" } = body;
 
     // Generate a unique call ID
     const callId = `interview-${nanoid(10)}`;
 
     // Create the call on Stream
     await createCall(callId);
+
+    // Save session to database
+    const sessionId = nanoid();
+    await db.insert(interviewSession).values({
+      id: sessionId,
+      callId,
+      userId,
+      interviewType,
+      language,
+      voice,
+      status: "in_progress",
+      startedAt: new Date(),
+    });
 
     // Generate a token for the user
     const token = generateUserToken(userId);
