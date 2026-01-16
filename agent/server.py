@@ -4,8 +4,9 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 import uvicorn
 import httpx
@@ -298,6 +299,53 @@ async def join_call(request: JoinRequest):
     )
 
     return {"status": "ok", "message": f"Agent joining call {request.call_id} in {request.language} with voice {request.voice}"}
+
+
+@app.post("/resume/optimize")
+async def optimize_resume(file: UploadFile = File(...)):
+    """
+    Endpoint to optimize a resume PDF.
+
+    Accepts a PDF file, extracts text, optimizes with AI, and returns optimized PDF.
+    """
+    # Import here to avoid circular imports and startup time
+    from resume_service import optimize_resume as process_resume
+
+    logger.info(f"Received resume optimization request: {file.filename}")
+
+    # Validate file type
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    # Read file content
+    try:
+        pdf_bytes = await file.read()
+    except Exception as e:
+        logger.error(f"Error reading uploaded file: {e}")
+        raise HTTPException(status_code=400, detail="Failed to read uploaded file")
+
+    # Validate file size (5MB limit)
+    if len(pdf_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size exceeds 5MB limit")
+
+    # Process the resume
+    try:
+        optimized_pdf = await process_resume(pdf_bytes)
+
+        # Return the optimized PDF
+        return Response(
+            content=optimized_pdf,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=optimized_{file.filename}"
+            }
+        )
+    except ValueError as e:
+        logger.error(f"Validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error optimizing resume: {e}")
+        raise HTTPException(status_code=500, detail="Failed to optimize resume. Please try again.")
 
 
 @app.get("/health")
