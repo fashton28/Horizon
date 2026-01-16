@@ -81,10 +81,13 @@ export const interviewSession = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name"),
     interviewType: text("interview_type").notNull(),
     language: text("language").notNull(),
     voice: text("voice").notNull(),
     status: text("status").notNull().default("in_progress"),
+    summaryStatus: text("summary_status").default("pending"),
+    fullTranscript: text("full_transcript"),
     startedAt: timestamp("started_at").notNull(),
     endedAt: timestamp("ended_at"),
     durationMs: integer("duration_ms"),
@@ -95,6 +98,48 @@ export const interviewSession = pgTable(
       .notNull(),
   },
   (table) => [index("interview_session_userId_idx").on(table.userId)],
+);
+
+export const sessionTranscript = pgTable(
+  "session_transcript",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => interviewSession.id, { onDelete: "cascade" }),
+    speaker: text("speaker").notNull(),
+    text: text("text").notNull(),
+    sequenceNumber: integer("sequence_number").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("session_transcript_sessionId_idx").on(table.sessionId),
+    index("session_transcript_sequence_idx").on(table.sessionId, table.sequenceNumber),
+  ],
+);
+
+export const sessionSummary = pgTable(
+  "session_summary",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .unique()
+      .references(() => interviewSession.id, { onDelete: "cascade" }),
+    overallSummary: text("overall_summary").notNull(),
+    strengths: text("strengths").notNull(),
+    areasForImprovement: text("areas_for_improvement").notNull(),
+    actionableNextSteps: text("actionable_next_steps").notNull(),
+    overallScore: integer("overall_score"),
+    modelUsed: text("model_used").default("gemini-1.5-flash"),
+    generatedAt: timestamp("generated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("session_summary_sessionId_idx").on(table.sessionId)],
 );
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -117,9 +162,25 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const interviewSessionRelations = relations(interviewSession, ({ one }) => ({
+export const interviewSessionRelations = relations(interviewSession, ({ one, many }) => ({
   user: one(user, {
     fields: [interviewSession.userId],
     references: [user.id],
+  }),
+  transcripts: many(sessionTranscript),
+  summary: one(sessionSummary),
+}));
+
+export const sessionTranscriptRelations = relations(sessionTranscript, ({ one }) => ({
+  session: one(interviewSession, {
+    fields: [sessionTranscript.sessionId],
+    references: [interviewSession.id],
+  }),
+}));
+
+export const sessionSummaryRelations = relations(sessionSummary, ({ one }) => ({
+  session: one(interviewSession, {
+    fields: [sessionSummary.sessionId],
+    references: [interviewSession.id],
   }),
 }));

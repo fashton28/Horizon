@@ -62,6 +62,9 @@ export async function POST(request: NextRequest) {
       .where(eq(interviewSession.callId, callId))
       .returning();
 
+    // Note: Summary generation is triggered by the transcript endpoint
+    // when the Python agent sends transcripts after the call ends
+
     return NextResponse.json({
       success: true,
       session: updatedSession,

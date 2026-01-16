@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id;
     const body = await request.json();
-    const { interviewType = "general", language = "en", voice = "Puck" } = body;
+    const { interviewType = "general", language = "en", voice = "Puck", name } = body;
 
     // Generate a unique call ID
     const callId = `interview-${nanoid(10)}`;
@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       id: sessionId,
       callId,
       userId,
+      name: name || null,
       interviewType,
       language,
       voice,

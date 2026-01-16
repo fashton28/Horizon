@@ -87,6 +87,7 @@ export default function DashboardPage() {
   const [selectedType, setSelectedType] = useState("general");
   const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [selectedVoice, setSelectedVoice] = useState("Puck");
+  const [sessionName, setSessionName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
@@ -124,6 +125,7 @@ export default function DashboardPage() {
           interviewType: selectedType,
           language: selectedLanguage,
           voice: selectedVoice,
+          name: sessionName.trim() || undefined,
         }),
       });
 
@@ -132,6 +134,7 @@ export default function DashboardPage() {
     },
     onSuccess: (data) => {
       setModalOpen(false);
+      setSessionName("");
       router.push(`/meeting/${data.callId}?type=${selectedType}&lang=${selectedLanguage}`);
     },
   });
@@ -185,12 +188,14 @@ export default function DashboardPage() {
   // Transform and filter sessions
   const recentSessions = (sessionsData?.sessions || []).map((s: {
     id: string;
+    name: string | null;
     interviewType: string;
     status: string;
     startedAt: string;
     durationMs: number | null;
   }) => ({
     id: s.id,
+    name: s.name,
     type: s.interviewType,
     status: s.status,
     date: formatDate(s.startedAt),
@@ -262,15 +267,17 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Search */}
+          {/* Session Name */}
           <div className="px-4 py-3 border-b">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search options..."
-                className="pl-9 h-9"
-              />
-            </div>
+            <label className="text-xs font-medium text-muted-foreground mb-2 block">
+              Session Name (optional)
+            </label>
+            <Input
+              placeholder="e.g., Google PM Interview Prep"
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
+              className="h-9"
+            />
           </div>
 
           {/* Selected Tags */}
@@ -598,13 +605,17 @@ export default function DashboardPage() {
                 </Card>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filteredSessions.map((session: { id: string; type: string; status: string; date: string; duration: string }) => {
+                  {filteredSessions.map((session: { id: string; name: string | null; type: string; status: string; date: string; duration: string }) => {
                     const typeInfo = interviewTypes.find((t) => t.id === session.type);
                     const statusStyles = session.status === "completed"
                       ? "bg-green-100 text-green-700"
                       : "bg-yellow-100 text-yellow-700";
                     return (
-                      <Card key={session.id} className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-sm">
+                      <Card
+                        key={session.id}
+                        className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-sm"
+                        onClick={() => router.push(`/session/${session.id}`)}
+                      >
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between mb-3">
                             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -614,7 +625,12 @@ export default function DashboardPage() {
                               {session.status.replace("_", " ")}
                             </span>
                           </div>
-                          <p className="font-medium capitalize">{session.type.replace("_", " ")} Interview</p>
+                          <p className="font-medium">
+                            {session.name || <span className="capitalize">{session.type.replace("_", " ")} Interview</span>}
+                          </p>
+                          {session.name && (
+                            <p className="text-xs text-muted-foreground capitalize">{session.type.replace("_", " ")}</p>
+                          )}
                           <p className="text-sm text-muted-foreground mt-1">
                             {session.date} · {session.duration}
                           </p>

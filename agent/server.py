@@ -1,14 +1,18 @@
 import asyncio
 import logging
 import os
+from datetime import datetime
+from typing import List, Dict, Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import httpx
 
 from vision_agents.core import User, Agent
 from vision_agents.plugins import getstream, gemini, smart_turn
+from vision_agents.core.llm.events import RealtimeUserSpeechTranscriptionEvent, RealtimeAgentSpeechTranscriptionEvent
 from google.genai.types import (
     LiveConnectConfigDict,
     SpeechConfigDict,
@@ -26,6 +30,30 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Next.js API URL for sending transcripts
+NEXTJS_API_URL = os.getenv("NEXTJS_API_URL", "http://localhost:3000")
+
+
+async def send_transcripts_to_backend(call_id: str, transcripts: List[Dict[str, Any]]):
+    """Send captured transcripts to the Next.js backend."""
+    if not transcripts:
+        logger.info(f"No transcripts to send for call {call_id}")
+        return
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{NEXTJS_API_URL}/api/session/transcript",
+                json={"callId": call_id, "transcripts": transcripts},
+                timeout=30.0
+            )
+            if response.status_code == 200:
+                logger.info(f"Successfully sent {len(transcripts)} transcript entries for call {call_id}")
+            else:
+                logger.error(f"Failed to send transcripts: {response.status_code} - {response.text}")
+    except Exception as e:
+        logger.error(f"Error sending transcripts to backend: {e}")
 
 app = FastAPI(title="AI Interview Agent")
 
@@ -171,6 +199,29 @@ def create_voice_config(voice_name: str) -> LiveConnectConfigDict:
 
 async def run_agent(call_id: str, call_type: str, interview_type: str, language: str = "en", voice: str = "Puck"):
     """Run the agent in a call."""
+    # List to store transcript entries
+    transcripts: List[Dict[str, Any]] = []
+
+    async def handle_user_transcript(event: RealtimeUserSpeechTranscriptionEvent):
+        """Handle user speech transcription events."""
+        if event.text:
+            transcripts.append({
+                "speaker": "user",
+                "text": event.text,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            logger.info(f"[Captured] User: {event.text[:80]}...")
+
+    async def handle_agent_transcript(event: RealtimeAgentSpeechTranscriptionEvent):
+        """Handle agent speech transcription events."""
+        if event.text:
+            transcripts.append({
+                "speaker": "ai",
+                "text": event.text,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            logger.info(f"[Captured] AI: {event.text[:80]}...")
+
     try:
         # Get language-specific instructions
         base_instructions = INTERVIEWER_INSTRUCTIONS.get(language, INTERVIEWER_INSTRUCTIONS["en"])
@@ -208,6 +259,10 @@ async def run_agent(call_id: str, call_type: str, interview_type: str, language:
             turn_detection=turn_detection,
         )
 
+        # Subscribe to transcript events
+        agent.subscribe(handle_user_transcript)
+        agent.subscribe(handle_agent_transcript)
+
         logger.info(f"Agent joining call: {call_type}/{call_id} (language: {language})")
 
         await agent.create_user()
@@ -219,9 +274,16 @@ async def run_agent(call_id: str, call_type: str, interview_type: str, language:
             await agent.finish()
 
         logger.info(f"Agent finished call: {call_id}")
+        logger.info(f"Captured {len(transcripts)} transcript entries")
+
+        # Send transcripts to the Next.js backend
+        await send_transcripts_to_backend(call_id, transcripts)
 
     except Exception as e:
         logger.error(f"Agent error: {e}")
+        # Still try to send any transcripts we captured before the error
+        if transcripts:
+            await send_transcripts_to_backend(call_id, transcripts)
         raise
 
 
