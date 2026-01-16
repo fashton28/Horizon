@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
@@ -51,6 +51,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Target,
+  Download,
+  RefreshCw,
 } from "lucide-react";
 
 // Interview types
@@ -92,6 +94,12 @@ export default function DashboardPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"sessions" | "resume">("sessions");
+
+  // Resume optimizer state
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [optimizedPdfUrl, setOptimizedPdfUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const user = session?.user;
   const userId = user?.id || "";
@@ -138,6 +146,87 @@ export default function DashboardPage() {
       router.push(`/meeting/${data.callId}?type=${selectedType}&lang=${selectedLanguage}`);
     },
   });
+
+  // Resume optimization mutation
+  const optimizeResume = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/resume/optimize", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to optimize resume");
+      }
+
+      if (!data.success || !data.download_url) {
+        throw new Error("Failed to generate optimized resume");
+      }
+
+      return data.download_url;
+    },
+    onSuccess: (url) => {
+      setOptimizedPdfUrl(url);
+    },
+  });
+
+  // File handling functions
+  const handleFileSelect = (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      alert("Please upload a PDF file");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size must be less than 5MB");
+      return;
+    }
+    setResumeFile(file);
+    setOptimizedPdfUrl(null);
+    optimizeResume.mutate(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleDownload = () => {
+    if (optimizedPdfUrl) {
+      // Open the UseResume download URL in a new tab
+      window.open(optimizedPdfUrl, "_blank");
+    }
+  };
+
+  const handleReset = () => {
+    setResumeFile(null);
+    setOptimizedPdfUrl(null);
+    optimizeResume.reset();
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleQuickStart = useCallback((type: string) => {
     setSelectedType(type);
@@ -653,60 +742,161 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileInputChange}
+                accept=".pdf"
+                className="hidden"
+              />
+
               {/* Upload Section */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                  <Card className="border-dashed">
-                    <CardContent className="flex flex-col items-center justify-center py-16">
-                      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                        <Upload className="h-8 w-8 text-primary" />
-                      </div>
-                      <h3 className="font-semibold text-lg mb-2">Upload your resume</h3>
-                      <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
-                        Drag and drop your resume file here, or click to browse. We support PDF and DOCX formats.
-                      </p>
-                      <Button>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Choose File
-                      </Button>
-                    </CardContent>
-                  </Card>
+                  {/* State: Idle - No file selected */}
+                  {!resumeFile && !optimizeResume.isPending && (
+                    <Card
+                      className={`border-dashed cursor-pointer transition-colors ${
+                        isDragging ? "border-primary bg-primary/5" : "hover:border-primary/50"
+                      }`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <CardContent className="flex flex-col items-center justify-center py-16">
+                        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                          <Upload className="h-8 w-8 text-primary" />
+                        </div>
+                        <h3 className="font-semibold text-lg mb-2">Upload your resume</h3>
+                        <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
+                          Drag and drop your resume file here, or click to browse. We support PDF files up to 5MB.
+                        </p>
+                        <Button type="button">
+                          <Upload className="mr-2 h-4 w-4" />
+                          Choose File
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
 
-                  {/* Mock Analysis Preview */}
-                  <Card className="mt-6">
-                    <CardContent className="p-6">
-                      <h3 className="font-semibold mb-4">What you&apos;ll get</h3>
-                      <div className="space-y-4">
-                        <div className="flex items-start gap-3">
-                          <div className="h-8 w-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                  {/* State: Processing */}
+                  {optimizeResume.isPending && (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-16">
+                        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                        </div>
+                        <h3 className="font-semibold text-lg mb-2">Optimizing Resume...</h3>
+                        <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
+                          Our AI is analyzing and enhancing your resume. This may take a moment.
+                        </p>
+                        <div className="w-64 space-y-3">
+                          <div className="flex items-center gap-3">
                             <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <span className="text-sm">Extracting content</span>
                           </div>
-                          <div>
-                            <p className="font-medium text-sm">ATS Compatibility Score</p>
-                            <p className="text-sm text-muted-foreground">See how well your resume performs with applicant tracking systems</p>
+                          <div className="flex items-center gap-3">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <span className="text-sm">Analyzing sections</span>
                           </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                            <Target className="h-4 w-4 text-blue-600" />
+                          <div className="flex items-center gap-3">
+                            <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                            <span className="text-sm">AI optimization in progress</span>
                           </div>
-                          <div>
-                            <p className="font-medium text-sm">Keyword Optimization</p>
-                            <p className="text-sm text-muted-foreground">Get suggestions for industry-specific keywords to include</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <div className="h-8 w-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-                            <AlertCircle className="h-4 w-4 text-orange-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">Improvement Suggestions</p>
-                            <p className="text-sm text-muted-foreground">Receive actionable feedback to strengthen your resume</p>
+                          <div className="flex items-center gap-3">
+                            <div className="h-4 w-4 rounded-full border-2 border-muted" />
+                            <span className="text-sm text-muted-foreground">Generating PDF</span>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* State: Error */}
+                  {optimizeResume.isError && (
+                    <Card className="border-destructive/50">
+                      <CardContent className="flex flex-col items-center justify-center py-16">
+                        <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+                          <AlertCircle className="h-8 w-8 text-destructive" />
+                        </div>
+                        <h3 className="font-semibold text-lg mb-2">Optimization Failed</h3>
+                        <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
+                          {optimizeResume.error?.message || "Something went wrong. Please try again."}
+                        </p>
+                        <div className="flex gap-3">
+                          <Button variant="outline" onClick={handleReset}>
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Try Again
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* State: Complete */}
+                  {optimizedPdfUrl && !optimizeResume.isPending && !optimizeResume.isError && (
+                    <Card className="border-green-500/50">
+                      <CardContent className="flex flex-col items-center justify-center py-16">
+                        <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                          <CheckCircle2 className="h-8 w-8 text-green-600" />
+                        </div>
+                        <h3 className="font-semibold text-lg mb-2">Optimization Complete!</h3>
+                        <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
+                          Your resume has been professionally enhanced with improved content, keywords, and formatting.
+                        </p>
+                        <div className="flex gap-3">
+                          <Button onClick={handleDownload}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download Resume
+                          </Button>
+                          <Button variant="outline" onClick={handleReset}>
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Optimize Another
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* What you'll get card - only show when idle */}
+                  {!resumeFile && !optimizeResume.isPending && (
+                    <Card className="mt-6">
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold mb-4">What you&apos;ll get</h3>
+                        <div className="space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">ATS-Optimized Content</p>
+                              <p className="text-sm text-muted-foreground">Resume formatted to pass applicant tracking systems</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <Target className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">Enhanced Keywords</p>
+                              <p className="text-sm text-muted-foreground">Industry-relevant keywords added throughout</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                              <Sparkles className="h-4 w-4 text-orange-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">Impactful Language</p>
+                              <p className="text-sm text-muted-foreground">Action-oriented bullet points that stand out</p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
 
                 {/* Sidebar Info */}
@@ -717,19 +907,19 @@ export default function DashboardPage() {
                       <ol className="space-y-3 text-sm">
                         <li className="flex items-start gap-3">
                           <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium flex-shrink-0">1</span>
-                          <span className="text-muted-foreground">Upload your current resume</span>
+                          <span className="text-muted-foreground">Upload your current resume (PDF)</span>
                         </li>
                         <li className="flex items-start gap-3">
                           <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium flex-shrink-0">2</span>
-                          <span className="text-muted-foreground">Our AI analyzes content, format, and keywords</span>
+                          <span className="text-muted-foreground">AI extracts and analyzes your content</span>
                         </li>
                         <li className="flex items-start gap-3">
                           <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium flex-shrink-0">3</span>
-                          <span className="text-muted-foreground">Get detailed feedback and suggestions</span>
+                          <span className="text-muted-foreground">Content is rewritten for maximum impact</span>
                         </li>
                         <li className="flex items-start gap-3">
                           <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium flex-shrink-0">4</span>
-                          <span className="text-muted-foreground">Download your optimized resume</span>
+                          <span className="text-muted-foreground">Download your optimized PDF</span>
                         </li>
                       </ol>
                     </CardContent>
@@ -742,7 +932,7 @@ export default function DashboardPage() {
                         <span className="font-semibold text-sm">Pro Tip</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        For best results, include a job description you&apos;re targeting. Our AI will tailor suggestions specifically for that role.
+                        For best results, use a simple text-based PDF resume. Complex designs with graphics may not preserve all formatting.
                       </p>
                     </CardContent>
                   </Card>
