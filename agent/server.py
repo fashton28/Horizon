@@ -360,4 +360,7 @@ async def health():
 if __name__ == "__main__":
     # Railway sets PORT env var; fallback to AGENT_PORT for local dev
     port = int(os.getenv("PORT", os.getenv("AGENT_PORT", "8001")))
+    logger.info(f"Starting server on port {port}...")
+    logger.info(f"NEXTJS_API_URL: {NEXTJS_API_URL}")
+    logger.info(f"ALLOWED_ORIGINS: {ALLOWED_ORIGINS}")
     uvicorn.run(app, host="0.0.0.0", port=port)

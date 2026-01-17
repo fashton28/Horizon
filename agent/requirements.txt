@@ -1,5 +1,6 @@
-vision-agents[getstream,gemini]
+vision-agents[getstream,gemini,smart_turn]
 python-dotenv
 fastapi
 uvicorn
 httpx
+pymupdf
