@@ -3,6 +3,10 @@ import { db } from "@/db";
 import { quizQuestion, quizCategory } from "@/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
+// Demo mode: fixed easy questions for 5-question quizzes
+// Answers: Constitution, Bill of Rights, the President, Washington D.C., July 4
+const DEMO_QUESTION_NUMBERS = [1, 5, 15, 94, 99];
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -11,6 +15,46 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10");
     const offset = parseInt(searchParams.get("offset") || "0");
     const random = searchParams.get("random") === "true";
+
+    // Demo mode: return fixed questions for 5-question quizzes
+    if (limit === 5 && !categoryId) {
+      const demoQuestions = await db
+        .select({
+          id: quizQuestion.id,
+          categoryId: quizQuestion.categoryId,
+          questionNumber: quizQuestion.questionNumber,
+          questionText: quizQuestion.questionText,
+          answers: quizQuestion.answers,
+          testVersion: quizQuestion.testVersion,
+          difficulty: quizQuestion.difficulty,
+          explanation: quizQuestion.explanation,
+          categoryName: quizCategory.name,
+          categorySlug: quizCategory.slug,
+        })
+        .from(quizQuestion)
+        .leftJoin(quizCategory, eq(quizQuestion.categoryId, quizCategory.id))
+        .where(
+          and(
+            eq(quizQuestion.testVersion, testVersion),
+            inArray(quizQuestion.questionNumber, DEMO_QUESTION_NUMBERS)
+          )
+        )
+        .orderBy(quizQuestion.questionNumber);
+
+      return NextResponse.json({
+        questions: demoQuestions.map((q) => ({
+          ...q,
+          category: {
+            id: q.categoryId,
+            name: q.categoryName,
+            slug: q.categorySlug,
+          },
+        })),
+        total: demoQuestions.length,
+        limit,
+        offset: 0,
+      });
+    }
 
     // Build conditions
     const conditions = [eq(quizQuestion.testVersion, testVersion)];

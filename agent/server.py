@@ -35,6 +35,10 @@ logger = logging.getLogger(__name__)
 # Next.js API URL for sending transcripts
 NEXTJS_API_URL = os.getenv("NEXTJS_API_URL", "http://localhost:3000")
 
+# CORS configuration - set ALLOWED_ORIGINS in production (comma-separated URLs)
+# Example: ALLOWED_ORIGINS=https://skillbridge.vercel.app,https://www.skillbridge.com
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else ["*"]
+
 
 async def send_transcripts_to_backend(call_id: str, transcripts: List[Dict[str, Any]]):
     """Send captured transcripts to the Next.js backend."""
@@ -60,7 +64,7 @@ app = FastAPI(title="AI Interview Agent")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -95,16 +95,16 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
       <nav className="flex-1 px-3 py-2">
         <div className="space-y-1">
           <button
-            onClick={handleSessionsClick}
+            onClick={() => router.push("/quiz")}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-              isSessionsActive && !isQuizActive
+              isQuizActive
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             }`}
-            title="Sessions"
+            title="Daybreak"
           >
-            <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
-            {!isCollapsed && <span className="text-sm font-medium">Sessions</span>}
+            <BookOpen className="h-4 w-4 flex-shrink-0" />
+            {!isCollapsed && <span className="text-sm font-medium">Daybreak</span>}
           </button>
           <button
             onClick={handleResumeClick}
@@ -113,22 +113,22 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             }`}
-            title="Resume Optimizer"
+            title="Meridian"
           >
             <FileText className="h-4 w-4 flex-shrink-0" />
-            {!isCollapsed && <span className="text-sm font-medium">Resume Optimizer</span>}
+            {!isCollapsed && <span className="text-sm font-medium">Meridian</span>}
           </button>
           <button
-            onClick={() => router.push("/quiz")}
+            onClick={handleSessionsClick}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-              isQuizActive
+              isSessionsActive && !isQuizActive
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             }`}
-            title="Citizenship Quiz"
+            title="Zenith"
           >
-            <BookOpen className="h-4 w-4 flex-shrink-0" />
-            {!isCollapsed && <span className="text-sm font-medium">Citizenship Quiz</span>}
+            <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
+            {!isCollapsed && <span className="text-sm font-medium">Zenith</span>}
           </button>
           <button
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
